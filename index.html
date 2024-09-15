@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tuki - DIY Repair Assistant</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f4f8;
+        }
+        h1 {
+            color: #1a237e;
+            text-align: center;
+        }
+        .input-section {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #1a237e;
+        }
+        textarea, input[type="file"], input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #1a237e;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #3949ab;
+        }
+        #output {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .error {
+            color: #d32f2f;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Tuki - DIY Repair Assistant</h1>
+    <div class="input-section">
+        <label for="api-key">OpenAI API Key:</label>
+        <input type="text" id="api-key" placeholder="Enter your OpenAI API key">
+
+        <label for="issue-description">Describe the issue:</label>
+        <textarea id="issue-description" rows="4" placeholder="Enter your issue here..."></textarea>
+
+        <label for="issue-image">Upload an image of the issue:</label>
+        <input type="file" id="issue-image" accept="image/*">
+
+        <button onclick="getHelp()">Get Help</button>
+        <button onclick="testAPI()">Test API</button>
+        <p id="error" class="error"></p>
+    </div>
+
+    <div id="output">
+        <h2>This is the fix:</h2>
+        <p id="fix-output"></p>
+    </div>
+
+    <script>
+        async function getHelp() {
+            const apiKey = document.getElementById('api-key').value;
+            const issueDescription = document.getElementById('issue-description').value;
+            const issueImage = document.getElementById('issue-image').files[0];
+            const errorElement = document.getElementById('error');
+            const outputElement = document.getElementById('fix-output');
+
+            errorElement.textContent = '';
+            outputElement.textContent = '';
+
+            if (!apiKey.trim()) {
+                errorElement.textContent = 'Please enter your OpenAI API key.';
+                return;
+            }
+
+            if (!issueDescription.trim()) {
+                errorElement.textContent = 'Please describe the issue.';
+                return;
+            }
+
+            if (!issueImage) {
+                errorElement.textContent = 'Please upload an image of the issue.';
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = async function(event) {
+                const base64Image = event.target.result.split(',')[1];
+
+                const prompt = `You are a DIY Coach, an AI assistant designed to provide real-time, personalized, and adaptive step-by-step guidance for household repairs. Your primary goal is to help users fix common household items safely and effectively. Here's how you should interact with the user:
+                1. Analyze the image and the user's description. If the image is unclear, politely ask the user to upload a better image. If the image is clear, provide a detailed description of what you see, including:
+                - What the item is
+                - What appears to be broken
+                - Tools that might be required to fix it
+                - An estimate of the number of steps needed to fix the problem
+                2. Assess the safety of the repair job on a scale of 1 to 10, where 1 is least safe and 10 is highly safe. Include this safety rating in every step of the repair instructions after giving the description. If the job seems unsafe (4 or lower), strongly recommend calling a professional technician and give a warning message that if they do it by themselves, they may get hurt or they might damage their appliance.
+                3. Ask the user if your assessment is correct. Wait for their confirmation before proceeding.
+                4. Inquire if the user has all the necessary tools. If they don't, suggest alternative household items that could be used instead. Ensure the user has everything required before moving to the next step.
+                5. Begin providing step-by-step instructions for the repair. For each step:
+                - Offer both simplified and crisp explanations. It shouldn't be too lengthy.
+                - Explain how to use any tools involved
+                - Ask the user if they've completed the step and if they're ready to move on
+
+                User's description: ${issueDescription}`;
+
+                try {
+                    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${apiKey}`,
+                        },
+                        body: JSON.stringify({
+                            model: "gpt-4-vision-preview",
+                            messages: [
+                                {
+                                    role: "user",
+                                    content: [
+                                        {
+                                            type: "text",
+                                            text: prompt
+                                        },
+                                        {
+                                            type: "image_url",
+                                            image_url: {
+                                                url: `data:image/jpeg;base64,${base64Image}`
+                                            }
+                                        }
+                                    ]
+                                }
+                            ],
+                            max_tokens: 300
+                        }),
+                    });
+
+                    const responseData = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(`API Error: ${response.status} - ${JSON.stringify(responseData)}`);
+                    }
+
+                    outputElement.textContent = responseData.choices[0].message.content;
+                } catch (error) {
+                    console.error('Detailed Error:', error);
+                    errorElement.textContent = `Error: ${error.message}. Please check the console for more details.`;
+                }
+            };
+
+            reader.readAsDataURL(issueImage);
+        }
+
+        async function testAPI() {
+            const apiKey = document.getElementById('api-key').value;
+            const errorElement = document.getElementById('error');
+            const outputElement = document.getElementById('fix-output');
+
+            errorElement.textContent = '';
+            outputElement.textContent = '';
+
+            if (!apiKey.trim()) {
+                errorElement.textContent = 'Please enter your OpenAI API key.';
+                return;
+            }
+
+            try {
+                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`,
+                    },
+                    body: JSON.stringify({
+                        model: "gpt-3.5-turbo",
+                        messages: [{ role: "user", content: "Hello, are you working?" }],
+                        max_tokens: 50
+                    }),
+                });
+
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(`API Error: ${response.status} - ${JSON.stringify(data)}`);
+                }
+                outputElement.textContent = "API Test Successful: " + data.choices[0].message.content;
+            } catch (error) {
+                console.error('Detailed Error:', error);
+                errorElement.textContent = `Error: ${error.message}. Please check the console for more details.`;
+            }
+        }
+    </script>
+</body>
+</html>
